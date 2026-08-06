@@ -79,7 +79,7 @@ export default function Home() {
           processed.add(key);
           results.push({
             instagram_username: username,
-            leads: group.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+            leads: group.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
           });
         }
       }
@@ -93,7 +93,7 @@ export default function Home() {
           processed.add(key);
           results.push({
             instagram_username: `(Website: ${website})`,
-            leads: group.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+            leads: group.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
           });
         }
       }
