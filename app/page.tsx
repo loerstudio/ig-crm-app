@@ -54,19 +54,52 @@ export default function Home() {
   };
 
   const findDuplicates = (leadsToCheck: Lead[]): DuplicateGroup[] => {
-    const grouped: Record<string, Lead[]> = {};
+    const groupedByUsername: Record<string, Lead[]> = {};
+    const groupedByWebsite: Record<string, Lead[]> = {};
+    const processed = new Set<string>();
+    const results: DuplicateGroup[] = [];
+
     leadsToCheck.forEach(lead => {
-      const key = lead.instagram_username.toLowerCase().trim();
-      if (!grouped[key]) grouped[key] = [];
-      grouped[key].push(lead);
+      const usernameKey = lead.instagram_username.toLowerCase().trim();
+      if (!groupedByUsername[usernameKey]) groupedByUsername[usernameKey] = [];
+      groupedByUsername[usernameKey].push(lead);
+
+      if (lead.website) {
+        const websiteKey = lead.website.toLowerCase().trim();
+        if (!groupedByWebsite[websiteKey]) groupedByWebsite[websiteKey] = [];
+        groupedByWebsite[websiteKey].push(lead);
+      }
     });
 
-    return Object.entries(grouped)
-      .filter(([_, group]) => group.length > 1)
-      .map(([username, group]) => ({
-        instagram_username: username,
-        leads: group.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
-      }));
+    // Process duplicates by instagram_username
+    Object.entries(groupedByUsername).forEach(([username, group]) => {
+      if (group.length > 1) {
+        const key = `username:${username}`;
+        if (!processed.has(key)) {
+          processed.add(key);
+          results.push({
+            instagram_username: username,
+            leads: group.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+          });
+        }
+      }
+    });
+
+    // Process duplicates by website
+    Object.entries(groupedByWebsite).forEach(([website, group]) => {
+      if (group.length > 1) {
+        const key = `website:${website}`;
+        if (!processed.has(key)) {
+          processed.add(key);
+          results.push({
+            instagram_username: `(Website: ${website})`,
+            leads: group.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+          });
+        }
+      }
+    });
+
+    return results;
   };
 
   const deleteDuplicates = async () => {
