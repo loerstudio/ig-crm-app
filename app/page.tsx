@@ -121,12 +121,22 @@ export default function Home() {
             <h1 className="text-4xl font-bold text-gray-900 mb-2">📱 IG Lead Manager</h1>
             <p className="text-gray-600">Track your AI UGC outreach</p>
           </div>
-          <button
-            onClick={logout}
-            className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition text-sm"
-          >
-            Logout
-          </button>
+          <div className="flex gap-2">
+            <a
+              href={process.env.NEXT_PUBLIC_SUPABASE_DASHBOARD_URL || '#'}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition text-sm"
+            >
+              🗄️ Database
+            </a>
+            <button
+              onClick={logout}
+              className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition text-sm"
+            >
+              Logout
+            </button>
+          </div>
         </div>
 
         {/* Dashboard */}
