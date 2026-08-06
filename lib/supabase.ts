@@ -5,7 +5,7 @@ export type Lead = {
   brand_name: string;
   instagram_username: string;
   website: string | null;
-  status: 'TO_CONTACT' | 'FOLLOW_UP' | 'CLIENT';
+  status: 'TO_CONTACT' | 'FOLLOW_UP' | 'REPLIED' | 'CLIENT';
   created_at: string;
 };
 

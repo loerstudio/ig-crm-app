@@ -8,7 +8,7 @@ import Papa from 'papaparse';
 export default function Home() {
   const router = useRouter();
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [filter, setFilter] = useState<'TO_CONTACT' | 'FOLLOW_UP' | 'CLIENT'>('TO_CONTACT');
+  const [filter, setFilter] = useState<'TO_CONTACT' | 'FOLLOW_UP' | 'REPLIED' | 'CLIENT'>('TO_CONTACT');
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ brand_name: '', instagram_username: '', website: '' });
@@ -108,6 +108,7 @@ export default function Home() {
   const stats = {
     TO_CONTACT: leads.filter(l => l.status === 'TO_CONTACT').length,
     FOLLOW_UP: leads.filter(l => l.status === 'FOLLOW_UP').length,
+    REPLIED: leads.filter(l => l.status === 'REPLIED').length,
     CLIENT: leads.filter(l => l.status === 'CLIENT').length,
   };
 
@@ -129,7 +130,7 @@ export default function Home() {
         </div>
 
         {/* Dashboard */}
-        <div className="grid grid-cols-3 gap-3 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
           <div className="bg-white rounded-lg shadow p-4 text-center">
             <div className="text-3xl font-bold text-blue-600">{stats.TO_CONTACT}</div>
             <div className="text-sm text-gray-600 mt-1">To Contact</div>
@@ -137,6 +138,10 @@ export default function Home() {
           <div className="bg-white rounded-lg shadow p-4 text-center">
             <div className="text-3xl font-bold text-yellow-600">{stats.FOLLOW_UP}</div>
             <div className="text-sm text-gray-600 mt-1">Follow Up</div>
+          </div>
+          <div className="bg-white rounded-lg shadow p-4 text-center">
+            <div className="text-3xl font-bold text-purple-600">{stats.REPLIED}</div>
+            <div className="text-sm text-gray-600 mt-1">Replied</div>
           </div>
           <div className="bg-white rounded-lg shadow p-4 text-center">
             <div className="text-3xl font-bold text-green-600">{stats.CLIENT}</div>
@@ -211,7 +216,7 @@ export default function Home() {
 
         {/* Status Tabs */}
         <div className="flex gap-2 mb-6 flex-wrap">
-          {(['TO_CONTACT', 'FOLLOW_UP', 'CLIENT'] as const).map((status) => (
+          {(['TO_CONTACT', 'FOLLOW_UP', 'REPLIED', 'CLIENT'] as const).map((status) => (
             <button
               key={status}
               onClick={() => setFilter(status)}
@@ -223,6 +228,7 @@ export default function Home() {
             >
               {status === 'TO_CONTACT' && '📞'}
               {status === 'FOLLOW_UP' && '⏰'}
+              {status === 'REPLIED' && '💬'}
               {status === 'CLIENT' && '🎉'}
               {status.replace(/_/g, ' ')}
             </button>
@@ -264,8 +270,8 @@ export default function Home() {
                   {filter === 'FOLLOW_UP' && (
                     <>
                       <button
-                        onClick={() => updateStatus(lead.id, 'CLIENT')}
-                        className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition whitespace-nowrap"
+                        onClick={() => updateStatus(lead.id, 'REPLIED')}
+                        className="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg transition whitespace-nowrap"
                       >
                         Replied ✅
                       </button>
@@ -276,6 +282,15 @@ export default function Home() {
                         Forget ✕
                       </button>
                     </>
+                  )}
+
+                  {filter === 'REPLIED' && (
+                    <button
+                      onClick={() => updateStatus(lead.id, 'CLIENT')}
+                      className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition whitespace-nowrap"
+                    >
+                      Won 🎉
+                    </button>
                   )}
 
                   {filter === 'CLIENT' && (
