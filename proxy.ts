@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (pathname === '/login') {
+  if (pathname === '/login' || pathname === '/api/auth') {
     return NextResponse.next();
   }
 
   const auth = request.cookies.get('crm-auth')?.value;
   if (!auth) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     return NextResponse.redirect(new URL('/login', request.url));
   }
 

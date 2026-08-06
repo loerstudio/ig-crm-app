@@ -42,3 +42,6 @@ next-env.d.ts
 
 # data storage
 .data/
+
+# supabase CLI cache (contains connection strings)
+supabase/.temp/

@@ -1,5 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { createClient } from '@supabase/supabase-js';
 
 export type Lead = {
   id: string;
@@ -10,55 +9,53 @@ export type Lead = {
   created_at: string;
 };
 
-const STORAGE_FILE = join(process.cwd(), '.data', 'leads.json');
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-function ensureDataDir() {
-  const dir = join(process.cwd(), '.data');
-  if (!existsSync(dir)) {
-    require('fs').mkdirSync(dir, { recursive: true });
-  }
-}
+const supabase = createClient(supabaseUrl, serviceRoleKey, {
+  auth: { persistSession: false },
+});
+
+const TABLE = 'ig_crm_leads';
 
 export const storage = {
-  getLeads(): Lead[] {
-    try {
-      ensureDataDir();
-      if (!existsSync(STORAGE_FILE)) return [];
-      const data = readFileSync(STORAGE_FILE, 'utf-8');
-      return JSON.parse(data);
-    } catch {
-      return [];
-    }
+  async getLeads(): Promise<Lead[]> {
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data as Lead[];
   },
 
-  addLead(lead: Omit<Lead, 'id' | 'created_at'>): Lead {
-    const leads = this.getLeads();
-    const newLead: Lead = {
-      ...lead,
-      id: Date.now().toString(),
-      created_at: new Date().toISOString(),
-    };
-    leads.push(newLead);
-    ensureDataDir();
-    writeFileSync(STORAGE_FILE, JSON.stringify(leads, null, 2));
-    return newLead;
+  async addLead(lead: Omit<Lead, 'id' | 'created_at'>): Promise<Lead> {
+    const { data, error } = await supabase
+      .from(TABLE)
+      .insert([lead])
+      .select()
+      .single();
+    if (error) throw error;
+    return data as Lead;
   },
 
-  updateLead(id: string, updates: Partial<Lead>): Lead | null {
-    const leads = this.getLeads();
-    const index = leads.findIndex(l => l.id === id);
-    if (index === -1) return null;
-    leads[index] = { ...leads[index], ...updates };
-    ensureDataDir();
-    writeFileSync(STORAGE_FILE, JSON.stringify(leads, null, 2));
-    return leads[index];
+  async updateLead(id: string, updates: Partial<Lead>): Promise<Lead | null> {
+    const { data, error } = await supabase
+      .from(TABLE)
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .maybeSingle();
+    if (error) throw error;
+    return data as Lead | null;
   },
 
-  deleteLead(id: string): boolean {
-    const leads = this.getLeads();
-    const filtered = leads.filter(l => l.id !== id);
-    ensureDataDir();
-    writeFileSync(STORAGE_FILE, JSON.stringify(filtered, null, 2));
-    return filtered.length < leads.length;
+  async deleteLead(id: string): Promise<boolean> {
+    const { data, error } = await supabase
+      .from(TABLE)
+      .delete()
+      .eq('id', id)
+      .select();
+    if (error) throw error;
+    return (data?.length ?? 0) > 0;
   },
 };
