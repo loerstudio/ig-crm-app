@@ -1,0 +1,302 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Lead } from '@/lib/supabase';
+import Papa from 'papaparse';
+
+export default function Home() {
+  const router = useRouter();
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [filter, setFilter] = useState<'TO_CONTACT' | 'FOLLOW_UP' | 'CLIENT'>('TO_CONTACT');
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState({ brand_name: '', instagram_username: '', website: '' });
+
+  const logout = async () => {
+    document.cookie = 'crm-auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+    router.push('/login');
+  };
+
+  useEffect(() => {
+    fetchLeads();
+  }, []);
+
+  const fetchLeads = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/leads');
+      const data = await res.json();
+      setLeads(data);
+    } catch (err) {
+      console.error(err);
+    }
+    setLoading(false);
+  };
+
+  const updateStatus = async (id: string, newStatus: string) => {
+    try {
+      const res = await fetch(`/api/leads/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      const updated = await res.json();
+      setLeads(leads.map(l => l.id === id ? updated : l));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const deleteLead = async (id: string) => {
+    try {
+      await fetch(`/api/leads/${id}`, { method: 'DELETE' });
+      setLeads(leads.filter(l => l.id !== id));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const addLead = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.brand_name || !formData.instagram_username) return;
+
+    try {
+      const res = await fetch('/api/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+      const newLead = await res.json();
+      setLeads([newLead, ...leads]);
+      setFormData({ brand_name: '', instagram_username: '', website: '' });
+      setShowForm(false);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleCSVImport = async (file: File) => {
+    Papa.parse(file, {
+      header: true,
+      complete: async (results) => {
+        const rows = results.data as Record<string, string>[];
+        for (const row of rows) {
+          if (row.brand_name && row.instagram_username) {
+            try {
+              await fetch('/api/leads', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  brand_name: row.brand_name,
+                  instagram_username: row.instagram_username,
+                  website: row.website || null,
+                  status: 'TO_CONTACT',
+                }),
+              });
+            } catch (err) {
+              console.error(err);
+            }
+          }
+        }
+        await fetchLeads();
+      },
+    });
+  };
+
+  const filteredLeads = leads.filter(l => l.status === filter);
+  const stats = {
+    TO_CONTACT: leads.filter(l => l.status === 'TO_CONTACT').length,
+    FOLLOW_UP: leads.filter(l => l.status === 'FOLLOW_UP').length,
+    CLIENT: leads.filter(l => l.status === 'CLIENT').length,
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 md:p-8">
+      <div className="max-w-2xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="text-center flex-1">
+            <h1 className="text-4xl font-bold text-gray-900 mb-2">📱 IG Lead Manager</h1>
+            <p className="text-gray-600">Track your AI UGC outreach</p>
+          </div>
+          <button
+            onClick={logout}
+            className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition text-sm"
+          >
+            Logout
+          </button>
+        </div>
+
+        {/* Dashboard */}
+        <div className="grid grid-cols-3 gap-3 mb-8">
+          <div className="bg-white rounded-lg shadow p-4 text-center">
+            <div className="text-3xl font-bold text-blue-600">{stats.TO_CONTACT}</div>
+            <div className="text-sm text-gray-600 mt-1">To Contact</div>
+          </div>
+          <div className="bg-white rounded-lg shadow p-4 text-center">
+            <div className="text-3xl font-bold text-yellow-600">{stats.FOLLOW_UP}</div>
+            <div className="text-sm text-gray-600 mt-1">Follow Up</div>
+          </div>
+          <div className="bg-white rounded-lg shadow p-4 text-center">
+            <div className="text-3xl font-bold text-green-600">{stats.CLIENT}</div>
+            <div className="text-sm text-gray-600 mt-1">Won 🎉</div>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex gap-3 mb-8 flex-wrap">
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="flex-1 min-w-[140px] bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition"
+          >
+            ➕ Add Lead
+          </button>
+          <label className="flex-1 min-w-[140px] bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition cursor-pointer text-center">
+            📥 Import CSV
+            <input
+              type="file"
+              accept=".csv"
+              onChange={(e) => e.target.files?.[0] && handleCSVImport(e.target.files[0])}
+              className="hidden"
+            />
+          </label>
+        </div>
+
+        {/* Add Lead Form */}
+        {showForm && (
+          <div className="bg-white rounded-lg shadow p-6 mb-8">
+            <form onSubmit={addLead} className="space-y-4">
+              <input
+                type="text"
+                placeholder="Brand Name"
+                value={formData.brand_name}
+                onChange={(e) => setFormData({ ...formData, brand_name: e.target.value })}
+                className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-indigo-600 placeholder:text-gray-700 placeholder:font-semibold text-gray-900"
+                required
+              />
+              <input
+                type="text"
+                placeholder="Instagram Username (no @)"
+                value={formData.instagram_username}
+                onChange={(e) => setFormData({ ...formData, instagram_username: e.target.value })}
+                className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-indigo-600 placeholder:text-gray-700 placeholder:font-semibold text-gray-900"
+                required
+              />
+              <input
+                type="url"
+                placeholder="Website (optional)"
+                value={formData.website}
+                onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                className="w-full p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-indigo-600 placeholder:text-gray-700 placeholder:font-semibold text-gray-900"
+              />
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg transition"
+                >
+                  Add
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-900 font-bold py-3 rounded-lg transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Status Tabs */}
+        <div className="flex gap-2 mb-6 flex-wrap">
+          {(['TO_CONTACT', 'FOLLOW_UP', 'CLIENT'] as const).map((status) => (
+            <button
+              key={status}
+              onClick={() => setFilter(status)}
+              className={`flex-1 min-w-[100px] font-bold py-2 px-4 rounded-lg transition ${
+                filter === status
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              {status === 'TO_CONTACT' && '📞'}
+              {status === 'FOLLOW_UP' && '⏰'}
+              {status === 'CLIENT' && '🎉'}
+              {status.replace(/_/g, ' ')}
+            </button>
+          ))}
+        </div>
+
+        {/* Leads List */}
+        {loading ? (
+          <div className="text-center text-gray-600">Loading...</div>
+        ) : filteredLeads.length === 0 ? (
+          <div className="text-center text-gray-600 bg-white rounded-lg p-8">
+            No leads yet
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredLeads.map((lead) => (
+              <div
+                key={lead.id}
+                className="bg-white rounded-lg shadow p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+              >
+                <div className="flex-1">
+                  <div className="font-bold text-lg text-gray-900">{lead.brand_name}</div>
+                  <div className="text-sm text-gray-600">@{lead.instagram_username}</div>
+                  {lead.website && (
+                    <div className="text-sm text-indigo-600">🔗 {lead.website}</div>
+                  )}
+                </div>
+
+                <div className="flex gap-2 flex-wrap">
+                  {filter === 'TO_CONTACT' && (
+                    <button
+                      onClick={() => updateStatus(lead.id, 'FOLLOW_UP')}
+                      className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg transition whitespace-nowrap"
+                    >
+                      Contacted ✅
+                    </button>
+                  )}
+
+                  {filter === 'FOLLOW_UP' && (
+                    <>
+                      <button
+                        onClick={() => updateStatus(lead.id, 'CLIENT')}
+                        className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition whitespace-nowrap"
+                      >
+                        Replied ✅
+                      </button>
+                      <button
+                        onClick={() => deleteLead(lead.id)}
+                        className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition whitespace-nowrap"
+                      >
+                        Forget ✕
+                      </button>
+                    </>
+                  )}
+
+                  {filter === 'CLIENT' && (
+                    <button
+                      onClick={() => deleteLead(lead.id)}
+                      className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition whitespace-nowrap"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* CSV Template Info */}
+        <div className="mt-8 bg-blue-50 border-2 border-blue-200 rounded-lg p-4 text-sm text-gray-700">
+          <strong>CSV Format:</strong> brand_name, instagram_username, website (optional)
+        </div>
+      </div>
+    </div>
+  );
+}
