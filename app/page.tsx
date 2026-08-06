@@ -12,6 +12,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ brand_name: '', instagram_username: '', website: '' });
+  const [newLeadIds, setNewLeadIds] = useState<Set<string>>(new Set());
 
   const logout = async () => {
     document.cookie = 'crm-auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
@@ -81,25 +82,29 @@ export default function Home() {
       header: true,
       complete: async (results) => {
         const rows = results.data as Record<string, string>[];
-        for (const row of rows) {
-          if (row.brand_name && row.instagram_username) {
-            try {
-              await fetch('/api/leads', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  brand_name: row.brand_name,
-                  instagram_username: row.instagram_username,
-                  website: row.website || null,
-                  status: 'TO_CONTACT',
-                }),
-              });
-            } catch (err) {
-              console.error(err);
-            }
-          }
+        const leadsToAdd = rows
+          .filter(row => row['Brand Name'] && (row['Website/Social'] || row.Website))
+          .map(row => ({
+            brand_name: row['Brand Name'],
+            instagram_username: row['Brand Name'].toLowerCase().replace(/\s+/g, ''),
+            website: row['Website/Social'] || row.Website || null,
+          }));
+
+        if (leadsToAdd.length === 0) return;
+
+        try {
+          const res = await fetch('/api/leads/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ leads: leadsToAdd }),
+          });
+          const data = await res.json();
+          const addedIds = new Set<string>(data.leads?.map((l: Lead) => l.id) || []);
+          setNewLeadIds(addedIds);
+          await fetchLeads();
+        } catch (err) {
+          console.error(err);
         }
-        await fetchLeads();
       },
     });
   };
@@ -141,9 +146,14 @@ export default function Home() {
 
         {/* Dashboard */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-          <div className="bg-white rounded-lg shadow p-4 text-center">
+          <div className="bg-white rounded-lg shadow p-4 text-center relative">
             <div className="text-3xl font-bold text-blue-600">{stats.TO_CONTACT}</div>
             <div className="text-sm text-gray-600 mt-1">To Contact</div>
+            {newLeadIds.size > 0 && (
+              <div className="absolute top-2 right-2 bg-green-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+                +{newLeadIds.size}
+              </div>
+            )}
           </div>
           <div className="bg-white rounded-lg shadow p-4 text-center">
             <div className="text-3xl font-bold text-yellow-600">{stats.FOLLOW_UP}</div>
@@ -260,7 +270,12 @@ export default function Home() {
                 className="bg-white rounded-lg shadow p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
               >
                 <div className="flex-1">
-                  <div className="font-bold text-lg text-gray-900">{lead.brand_name}</div>
+                  <div className="flex items-center gap-2">
+                    <div className="font-bold text-lg text-gray-900">{lead.brand_name}</div>
+                    {newLeadIds.has(lead.id) && (
+                      <span className="bg-green-100 text-green-800 text-xs font-bold px-2 py-1 rounded">NEW</span>
+                    )}
+                  </div>
                   <div className="text-sm text-gray-600">@{lead.instagram_username}</div>
                   {lead.website && (
                     <div className="text-sm text-indigo-600">🔗 {lead.website}</div>
