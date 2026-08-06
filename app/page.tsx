@@ -5,6 +5,11 @@ import { useRouter } from 'next/navigation';
 import { Lead } from '@/lib/supabase';
 import Papa from 'papaparse';
 
+type DuplicateGroup = {
+  instagram_username: string;
+  leads: Lead[];
+};
+
 export default function Home() {
   const router = useRouter();
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -13,6 +18,8 @@ export default function Home() {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ brand_name: '', instagram_username: '', website: '' });
   const [newLeadIds, setNewLeadIds] = useState<Set<string>>(new Set());
+  const [duplicates, setDuplicates] = useState<DuplicateGroup[]>([]);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
 
   const logout = async () => {
     document.cookie = 'crm-auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
@@ -22,6 +29,17 @@ export default function Home() {
   useEffect(() => {
     fetchLeads();
   }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const found = findDuplicates(leads);
+      if (found.length > 0) {
+        setDuplicates(found);
+        setShowDuplicateModal(true);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [leads]);
 
   const fetchLeads = async () => {
     setLoading(true);
@@ -33,6 +51,33 @@ export default function Home() {
       console.error(err);
     }
     setLoading(false);
+  };
+
+  const findDuplicates = (leadsToCheck: Lead[]): DuplicateGroup[] => {
+    const grouped: Record<string, Lead[]> = {};
+    leadsToCheck.forEach(lead => {
+      const key = lead.instagram_username.toLowerCase().trim();
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(lead);
+    });
+
+    return Object.entries(grouped)
+      .filter(([_, group]) => group.length > 1)
+      .map(([username, group]) => ({
+        instagram_username: username,
+        leads: group.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+      }));
+  };
+
+  const deleteDuplicates = async () => {
+    for (const group of duplicates) {
+      const toDelete = group.leads.slice(1);
+      for (const lead of toDelete) {
+        await deleteLead(lead.id);
+      }
+    }
+    setDuplicates([]);
+    setShowDuplicateModal(false);
   };
 
   const updateStatus = async (id: string, newStatus: string) => {
@@ -337,6 +382,55 @@ export default function Home() {
           <strong>CSV Format:</strong> brand_name, instagram_username, website (optional)
         </div>
       </div>
+
+      {/* Duplicate Detection Modal */}
+      {showDuplicateModal && duplicates.length > 0 && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-lg w-full">
+            <h2 className="text-2xl font-bold text-red-600 mb-4">⚠️ Duplicates Found</h2>
+            <div className="space-y-4 max-h-96 overflow-y-auto mb-6">
+              {duplicates.map((group, idx) => (
+                <div key={idx} className="border-l-4 border-red-500 bg-red-50 p-4 rounded">
+                  <div className="font-bold text-gray-900 mb-2">@{group.instagram_username}</div>
+                  <div className="space-y-2">
+                    {group.leads.map((lead, leadIdx) => (
+                      <div
+                        key={lead.id}
+                        className={`p-2 rounded text-sm ${
+                          leadIdx === 0
+                            ? 'bg-green-100 border-2 border-green-500'
+                            : 'bg-gray-200 opacity-60'
+                        }`}
+                      >
+                        <div className="font-semibold">{lead.brand_name}</div>
+                        <div className="text-xs text-gray-600">
+                          {new Date(lead.created_at).toLocaleString()}
+                        </div>
+                        {leadIdx === 0 && <div className="text-xs font-bold text-green-700">✓ KEEP</div>}
+                        {leadIdx > 0 && <div className="text-xs font-bold text-red-700">✕ DELETE</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDuplicateModal(false)}
+                className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-900 font-bold py-3 rounded-lg transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={deleteDuplicates}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-lg transition"
+              >
+                OK, Delete Duplicates
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
