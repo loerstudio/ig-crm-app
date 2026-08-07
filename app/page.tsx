@@ -44,9 +44,9 @@ export default function Home() {
 
   useEffect(() => {
     const checkAllWebsites = async () => {
-      const newHealth: Record<string, { reachable: boolean; status?: number }> = {};
-      for (const lead of leads) {
-        if (lead.website) {
+      const checksToRun = leads
+        .filter(l => l.website)
+        .map(async (lead) => {
           try {
             const res = await fetch('/api/check-url', {
               method: 'POST',
@@ -54,12 +54,17 @@ export default function Home() {
               body: JSON.stringify({ url: lead.website }),
             });
             const data = await res.json();
-            newHealth[lead.id] = { reachable: data.reachable, status: data.status };
+            return [lead.id, { reachable: data.reachable, status: data.status }] as const;
           } catch (err) {
-            newHealth[lead.id] = { reachable: false };
+            return [lead.id, { reachable: false }] as const;
           }
-        }
-      }
+        });
+
+      const results = await Promise.all(checksToRun);
+      const newHealth: Record<string, { reachable: boolean; status?: number }> = {};
+      results.forEach(([id, health]) => {
+        newHealth[id] = health;
+      });
       setLeadHealth(newHealth);
     };
 
