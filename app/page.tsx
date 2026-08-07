@@ -20,6 +20,7 @@ export default function Home() {
   const [newLeadIds, setNewLeadIds] = useState<Set<string>>(new Set());
   const [duplicates, setDuplicates] = useState<DuplicateGroup[]>([]);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [leadHealth, setLeadHealth] = useState<Record<string, { reachable: boolean; status?: number }>>({});
 
   const logout = async () => {
     document.cookie = 'crm-auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
@@ -38,6 +39,32 @@ export default function Home() {
         setShowDuplicateModal(true);
       }
     }, 1000);
+    return () => clearInterval(interval);
+  }, [leads]);
+
+  useEffect(() => {
+    const checkAllWebsites = async () => {
+      const newHealth: Record<string, { reachable: boolean; status?: number }> = {};
+      for (const lead of leads) {
+        if (lead.website) {
+          try {
+            const res = await fetch('/api/check-url', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: lead.website }),
+            });
+            const data = await res.json();
+            newHealth[lead.id] = { reachable: data.reachable, status: data.status };
+          } catch (err) {
+            newHealth[lead.id] = { reachable: false };
+          }
+        }
+      }
+      setLeadHealth(newHealth);
+    };
+
+    const interval = setInterval(checkAllWebsites, 5000);
+    checkAllWebsites();
     return () => clearInterval(interval);
   }, [leads]);
 
@@ -356,7 +383,14 @@ export default function Home() {
                   </div>
                   <div className="text-sm text-gray-600">@{lead.instagram_username}</div>
                   {lead.website && (
-                    <div className="text-sm text-indigo-600">🔗 {lead.website}</div>
+                    <div className="text-sm flex items-center gap-2">
+                      <span className={leadHealth[lead.id]?.reachable ? '🟢' : '🔴'}>
+                        {leadHealth[lead.id]?.status && `(${leadHealth[lead.id].status})`}
+                      </span>
+                      <a href={lead.website} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">
+                        🔗 {lead.website}
+                      </a>
+                    </div>
                   )}
                 </div>
 
